@@ -1,0 +1,268 @@
+================================================================================
+  cPanel UPLOAD INSTRUCTIONS
+  Landing Page + Admin Dashboard (Laravel 11)
+================================================================================
+
+This project is built for SHARED HOSTING. It has no "public" folder: the project
+root IS the web root. index.php and .htaccess sit next to app/, vendor/ and .env.
+That is why you upload the whole folder into public_html and it just works.
+
+Do NOT move index.php into a subfolder. Do NOT create a public/ folder.
+
+
+--------------------------------------------------------------------------------
+1. REQUIREMENTS
+--------------------------------------------------------------------------------
+
+  PHP version      8.2 or higher  (8.3 / 8.4 also fine)
+  MySQL            5.7+ or 8.0
+  PHP extensions   pdo_mysql, mbstring, openssl, tokenizer, ctype, fileinfo,
+                   dom, xml, curl, json, filter, session, hash, bcmath
+  Composer         2.x  (most cPanel hosts have it; see step 5 note)
+
+  cPanel menus used:  MultiPHP Manager / Select PHP Version
+                      MySQL Databases
+                      File Manager
+                      Terminal  (or any SSH)
+
+
+--------------------------------------------------------------------------------
+2. WHAT TO UPLOAD  (and what to leave behind)
+--------------------------------------------------------------------------------
+
+  UPLOAD the whole project folder into public_html, so that these exist:
+
+      public_html/index.php
+      public_html/.htaccess
+      public_html/artisan
+      public_html/app/
+      public_html/vendor/        <- only if you built it ON the server
+      ... and so on
+
+  IMPORTANT -- make sure "show hidden files" is ON in cPanel File Manager,
+  otherwise .htaccess and .env are silently skipped and the site breaks.
+
+  DO NOT UPLOAD these from your Mac. Delete them locally first, or let the
+  steps below create them fresh on the server:
+
+      vendor/                    built for your Mac's PHP, will not run
+      .env                       holds your local database password
+      storage/framework/views/   compiled Blade from local, stale paths
+      bootstrap/cache/*.php      compiled locally, stale paths
+      .phpunit.result.cache
+
+  Keep locally, never upload: .git, .idea, .vscode, tests/, phpunit.xml
+
+  Recommended: delete vendor/ and .env on your Mac before uploading, then
+  create them on the server with the commands in steps 4-5. This is the most
+  reliable way to avoid the "class not found" or "wrong PHP version" errors.
+
+
+--------------------------------------------------------------------------------
+3. CREATE THE DATABASE  (cPanel GUI)
+--------------------------------------------------------------------------------
+
+  cPanel -> MySQL Databases
+
+    a) Create a New Database
+         Name:  myshop          -> becomes  youracct_myshop
+         NOTE the full name, you need it for DB_DATABASE.
+
+    b) Create a New User
+         Username: myshopuser   -> becomes  youracct_myshopuser
+         Password: a strong one
+         NOTE both, you need them for DB_USERNAME / DB_PASSWORD.
+
+    c) Add User To Database
+         Select youracct_myshop + youracct_myshopuser
+         IMPORTANT: tick "ALL PRIVILEGES"
+         Click Add.
+
+  Without ALL PRIVILEGES the site will show "Access denied for user".
+
+
+--------------------------------------------------------------------------------
+4. CREATE .env ON THE SERVER
+--------------------------------------------------------------------------------
+
+  cPanel -> File Manager -> public_html -> Settings -> Show Hidden Files
+
+  a) Copy .env.example and rename the copy to .env  (both files will sit in
+     the same folder; the one named .env is the one that matters)
+
+  b) Edit .env and change ONLY these lines:
+
+        APP_ENV=production
+        APP_DEBUG=false
+        APP_URL=https://yourdomain.com          <- no trailing slash
+
+        DB_CONNECTION=mysql
+        DB_HOST=localhost
+        DB_PORT=3306
+        DB_DATABASE=youracct_myshop            <- full name with your prefix
+        DB_USERNAME=youracct_myshopuser        <- full name with your prefix
+        DB_PASSWORD=the-password-you-chose
+
+  c) Leave everything else as it is. APP_KEY is generated in step 5.
+     APP_TIMEZONE is already Asia/Dhaka; the site text is in Bangla.
+
+  Also set the mail settings if you want order emails to actually send:
+
+        MAIL_MAILER=smtp
+        MAIL_HOST=mail.yourdomain.com
+        MAIL_PORT=587
+        MAIL_USERNAME=full@email.address
+        MAIL_PASSWORD=mail-box-password
+        MAIL_FROM_ADDRESS=no-reply@yourdomain.com
+
+
+--------------------------------------------------------------------------------
+5. INSTALL  (cPanel Terminal / SSH)
+--------------------------------------------------------------------------------
+
+  Open cPanel -> Terminal. Then:
+
+    cd ~/public_html
+
+    php -v                       <- confirm 8.2 or higher; if not, fix the PHP
+                                   version in MultiPHP Manager FIRST, then
+                                   re-check, or the rest of this will fail
+
+    composer install --no-dev --optimize-autoloader
+
+    php artisan key:generate     <- writes APP_KEY into .env
+    php artisan migrate --force  <- creates the tables
+    php artisan migrate --seed   <- optional: demo products, zones, admin user
+    php artisan optimize:clear
+
+    chmod -R 775 storage bootstrap/cache uploads
+
+  If composer is not installed, ask your host to enable it, or run this from
+  your Mac terminal instead (it will upload vendor/ built for Linux, which is
+  what the server needs):
+
+    composer install --no-dev --optimize-autoloader --ignore-platform-reqs
+
+  DO NOT run "php artisan storage:link". It is not needed and has no effect in
+  this layout. Uploaded images are written straight into the uploads/ folder
+  and served at /uploads/...
+
+
+--------------------------------------------------------------------------------
+6. CHECK IT
+--------------------------------------------------------------------------------
+
+  Visit:  https://yourdomain.com/            the landing page
+          https://yourdomain.com/admin      the admin panel
+
+  Admin login (created by the seeder):
+
+      email:     admin@admin.com
+      password:  admin123
+
+  Change that password immediately after the first login. You can also change
+  the credentials in database/seeders/DatabaseSeeder.php before step 5, but
+  changing the file afterwards has no effect -- edit the admin user in the
+  admin panel instead.
+
+
+--------------------------------------------------------------------------------
+7. IF SOMETHING IS WRONG
+--------------------------------------------------------------------------------
+
+  "404 Not Found - The resource requested could not be found on this server!"
+      This is Apache, not the app. The request never reached index.php.
+      Cause: public_html/index.php is missing, or the .htaccess was not
+      uploaded, or the whole project ended up one folder too deep
+      (public_html/landing_page/index.php). Check the file layout first.
+
+  Blank white page
+      Almost always APP_DEBUG. Temporarily set APP_DEBUG=true, reload the page,
+      read the error, then set it back to false. The full log is also at
+      storage/logs/laravel.log
+
+  "Class not found" / "vendor/autoload.php missing"
+      You uploaded the app but not vendor/, or you uploaded a vendor/ that was
+      built on your Mac. Run composer install on the server.
+
+  "Access denied for user" or "SQLSTATE[HY000] [1045]"
+      Wrong DB_USERNAME / DB_PASSWORD / DB_DATABASE in .env, or the database
+      user was not given ALL PRIVILEGES. cPanel prefixes both the database and
+      the user with your account name.
+
+  "Base table or view not found" / "no such table"
+      Migrations never ran. Run: php artisan migrate --force
+
+  500 error right after uploading .env
+      You forgot php artisan key:generate, or APP_KEY is empty.
+      Run: php artisan key:generate && php artisan optimize:clear
+
+  Product images upload fails / "permission denied"
+      uploads/ is not writable by PHP:
+          chmod -R 775 storage bootstrap/cache uploads
+
+  CSS or JS 404 (page loads but looks unstyled)
+      css/, js/ and img/ are missing from public_html. The .htaccess blocks
+      nothing you need, so this is always a missing-upload problem.
+
+  Changes I made to .env are ignored
+      Cached config. Run: php artisan optimize:clear
+      (Do this after EVERY .env edit.)
+
+
+--------------------------------------------------------------------------------
+8. SECURITY
+--------------------------------------------------------------------------------
+
+  Because the project root is the web root, .env, storage/ and vendor/ are
+  technically inside the document root. The .htaccess in the project root
+  returns 404 for:
+
+      app/ bootstrap/ config/ database/ lang/ resources/ routes/ storage/
+      tests/ vendor/
+      any dotfile (.env, .git, .htaccess ...) except .well-known/
+      artisan, composer.json, composer.lock, phpunit.xml, README.md,
+      instruction.txt
+      and these file types ANYWHERE in the tree:
+          .txt .sql .log .ini .bak .old .orig .save .swp .dist .example
+          .env .json .lock .xml .md .yml .yaml
+      (robots.txt is the one text file deliberately left reachable)
+
+  That last rule matters more than it looks. If you keep a scratch copy of your
+  cPanel .env in the project root -- even as something like "cpnael_env.txt" --
+  the type rule is what stops the public from downloading your APP_KEY and
+  database password. Do not keep such a file in public_html at all; the real
+  .env belongs on the server only.
+
+  Please confirm on your live site that these all return 404:
+
+      https://yourdomain.com/.env
+      https://yourdomain.com/vendor/autoload.php
+      https://yourdomain.com/storage/logs/laravel.log
+      https://yourdomain.com/app/Models/Product.php
+      https://yourdomain.com/cpnael_env.txt        (if that file exists)
+
+  and that these still return 200:
+
+      https://yourdomain.com/robots.txt
+      https://yourdomain.com/css/site.css
+      https://yourdomain.com/uploads/<any-product-image>
+
+  If any of them loads instead of 404-ing, something is wrong with how the
+  .htaccess was uploaded -- re-upload it and make sure mod_rewrite is enabled
+  (most hosts have it on; your host can confirm).
+
+  IMPORTANT: "php artisan serve" and PHP's built-in server IGNORE .htaccess
+  completely. Running the site that way exposes .env, vendor/ and storage/logs/
+  to anyone. That server is for local development only, never for a live site.
+
+  Also: set APP_DEBUG=false in production. A stack trace printed on a live
+  site leaks your file paths and can expose credentials.
+
+  If your host ever lets you choose the document root, the stronger setup is to
+  move index.php, .htaccess, css/, js/, img/, favicon.ico and robots.txt into a
+  public/ folder and point the document root at it. Do not do this on a host
+  that will not let you change the document root -- that is the exact problem
+  this layout exists to solve.
+
+================================================================================

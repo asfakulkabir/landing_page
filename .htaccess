@@ -1,0 +1,65 @@
+# ---------------------------------------------------------------------------
+#  Shared-hosting layout: the project root IS the document root.
+#  Only css/, js/, img/, uploads/, robots.txt, favicon.ico and index.php may be
+#  requested directly. Everything else must 404.
+#
+#  These rules must stay ABOVE the front-controller rewrite at the bottom.
+# ---------------------------------------------------------------------------
+
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    RewriteEngine On
+
+    # --- Block application code, config, dependencies, logs and sessions -----
+    RewriteRule ^(app|bootstrap|config|database|lang|resources|routes|storage|tests|vendor)/?$ - [R=404,L]
+    RewriteRule ^(app|bootstrap|config|database|lang|resources|routes|storage|tests|vendor)/ - [R=404,L]
+
+    # --- Block dotfiles: .env, .git, .htaccess, .htpasswd --------------------
+    #     .well-known/ is left open so Let's Encrypt / AutoSSL can work.
+    RewriteRule (^|/)\.(?!well-known/) - [R=404,L]
+
+    # --- Block non-web files that ship in the project root -------------------
+    RewriteRule ^(artisan|composer\.(json|lock)|phpunit\.xml|README\.md|instruction\.txt)$ - [R=404,L]
+
+    # --- Block non-web file TYPES anywhere in the tree -----------------------
+    #     Stray .txt/.sql/.log/.bak copies of .env are the usual way secrets
+    #     leak out of a document-root-is-project-root layout. robots.txt is the
+    #     only text file that legitimately has to be reachable.
+    RewriteCond %{REQUEST_URI} !^/robots\.txt$
+    RewriteRule \.(txt|sql|log|ini|bak|old|orig|save|swp|dist|example|env|json|lock|xml|md|ya?ml)$ - [R=404,L]
+
+    # --- Handle Authorization Header ----------------------------------------
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # --- Handle X-XSRF-Token Header ------------------------------------------
+    RewriteCond %{HTTP:x-xsrf-token} .
+    RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
+
+    # --- Redirect Trailing Slashes If Not A Folder... ------------------------
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} (.+)/$
+    RewriteRule ^ %1 [L,R=301]
+
+    # --- Send Requests To Front Controller... --------------------------------
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+# Fallback for the (unlikely) case where mod_rewrite is unavailable.
+<IfModule !mod_rewrite.c>
+    <FilesMatch "\.(env|json|lock|xml|md|ya?ml|dist|example)$">
+        <IfModule mod_authz_core.c>
+            Require all denied
+        </IfModule>
+    </FilesMatch>
+    <Files "artisan">
+        <IfModule mod_authz_core.c>
+            Require all denied
+        </IfModule>
+    </Files>
+</IfModule>
