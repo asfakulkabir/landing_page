@@ -165,9 +165,104 @@ Do NOT move index.php into a subfolder. Do NOT create a public/ folder.
   changing the file afterwards has no effect -- edit the admin user in the
   admin panel instead.
 
+  Need a second admin, or a new password for an existing account? See step 7.
+
 
 --------------------------------------------------------------------------------
-7. IF SOMETHING IS WRONG
+7. CREATE AN ADMIN ACCOUNT  (cPanel Terminal)
+--------------------------------------------------------------------------------
+
+  IMPORTANT: this project has NO "role" column. Every row in the users table can
+  log in at /admin/login and gets full access to the dashboard, products, orders,
+  delivery zones, testimonials and settings. So "creating an admin" here is just
+  "creating a user" -- and any account you add is a full admin.
+
+  Run everything from the folder that contains artisan (usually ~/public_html):
+
+      cd ~/public_html
+
+  The commands below use "php artisan tinker". tinker is a production
+  dependency of this project, so it is available even after you installed with
+  "composer install --no-dev".
+
+  a) Create a new admin
+  ------------------------------
+
+      php artisan tinker --execute='
+      App\Models\User::updateOrCreate(
+          ["email" => "you@example.com"],
+          ["name" => "Your Name", "password" => "ChangeMe123", "email_verified_at" => now()]
+      );
+      '
+
+      Replace the email, the name and the password inside the brackets, then
+      press Enter. Nothing is printed on success -- that is normal.
+
+      Do NOT hash the password yourself. App\Models\User casts the password
+      column to "hashed" (app/Models/User.php:46), so Laravel encrypts the
+      plain text for you. Pasting in an already-hashed value breaks login.
+
+  b) Confirm it worked
+  ------------------------------
+
+      php artisan tinker --execute='
+      foreach (App\Models\User::all() as $u) {
+          echo $u->id . "  " . $u->email . "  " . $u->name . PHP_EOL;
+      }
+      '
+
+      Your new email must appear in that list.
+
+  c) Reset a password, or rename an account
+  ------------------------------
+
+  Re-run the exact same command from (a) with the same email and the new
+  password. updateOrCreate finds the existing row and updates it instead of
+  creating a duplicate. Anything you leave out of the array (say "name") keeps
+  its current value.
+
+  d) Delete an admin
+  ------------------------------
+
+      php artisan tinker --execute='
+      App\Models\User::where("email", "you@example.com")->delete();
+      '
+
+  e) The built-in admin
+  ------------------------------
+
+  database/seeders/DatabaseSeeder.php creates admin@admin.com / admin123, and
+  brings it back if it was deleted:
+
+      php artisan db:seed --force
+
+  It is safe to re-run: it leaves every other user alone, and it will NOT reset
+  a password you already changed (Laravel's hashed cast recognises an existing
+  hash and keeps it). On a live site, change that account's password with the
+  command in (c) -- editing the seeder file after install has no effect.
+
+  f) If the command does not run
+  ------------------------------
+
+  It sits waiting for input when the code is not wrapped in the quotes, or when
+  "--execute" is missing. Keep the single quotes exactly as shown.
+
+  If your shell still fights with the quoting, use the double-quote form and
+  escape the PHP variables with a backslash:
+
+      php artisan tinker --execute="\$u = App\Models\User::create(['email' => 'admin@planetmavis.com', 'name' => 'admin', 'password' => 'admin1234']); echo \$u->email;"
+
+  If tinker is not available at all, generate a hash with PHP, then paste the
+  row in yourself through phpMyAdmin -> SQL tab:
+
+      php artisan tinker --execute='echo Illuminate\Support\Facades\Hash::make("ChangeMe123");'
+
+  The users table columns are: name, email (unique), email_verified_at
+  (nullable), password, remember_token (nullable), created_at, updated_at.
+
+
+--------------------------------------------------------------------------------
+8. IF SOMETHING IS WRONG
 --------------------------------------------------------------------------------
 
   "404 Not Found - The resource requested could not be found on this server!"
@@ -211,7 +306,7 @@ Do NOT move index.php into a subfolder. Do NOT create a public/ folder.
 
 
 --------------------------------------------------------------------------------
-8. SECURITY
+9. SECURITY
 --------------------------------------------------------------------------------
 
   Because the project root is the web root, .env, storage/ and vendor/ are
